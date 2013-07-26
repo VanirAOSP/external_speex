@@ -1,7 +1,6 @@
 /* Copyright (C) 2007-2008 Jean-Marc Valin
  * Copyright (C) 2008 Thorvald Natvig
- * Copyright (C) 2011 Texas Instruments
- *               author Jyri Sarha
+ * Copyright (C) 2011 Jyri Sarha, Texas Instruments
  */
 /**
    @file resample_neon.h
@@ -39,32 +38,20 @@
 #include <arm_neon.h>
 
 #ifdef FIXED_POINT
-#ifdef __thumb2__ 
 static inline int32_t saturate_32bit_to_16bit(int32_t a) {
     int32_t ret;
-    asm ("ssat %[ret], #16, %[a]"
-         : [ret] "=&r" (ret)
-         : [a] "r" (a)
-         : );
+    asm volatile ("vmov.s32 d24[0], %[a]\n"
+                  "vqmovn.s32 d24, q12\n"
+                  "vmov.s16 %[ret], d24[0]\n"
+                  : [ret] "=&r" (ret)
+                  : [a] "r" (a)
+                  : "q12", "d24", "d25" );
     return ret;
 }
-#else
-static inline int32_t saturate_32bit_to_16bit(int32_t a) {
-    int32_t ret;
-    asm ("vmov.s32 d0[0], %[a]\n"
-         "vqmovn.s32 d0, q0\n"
-         "vmov.s16 %[ret], d0[0]\n"
-         : [ret] "=&r" (ret)
-         : [a] "r" (a)
-         : "q0");
-    return ret;
-}
-#endif
 #undef WORD2INT
 #define WORD2INT(x) (saturate_32bit_to_16bit(x))
 
 #define OVERRIDE_INNER_PRODUCT_SINGLE
-/* Only works when len % 4 == 0 */
 static inline int32_t inner_product_single(const int16_t *a, const int16_t *b, unsigned int len)
 {
     int32_t ret;
@@ -73,15 +60,15 @@ static inline int32_t inner_product_single(const int16_t *a, const int16_t *b, u
 
     asm volatile ("	 cmp %[len], #0\n"
 		  "	 bne 1f\n"
-		  "	 vld1.16 {d16}, [%[b]]!\n"
-		  "	 vld1.16 {d20}, [%[a]]!\n"
+		  "	 vld1.16 {d16}, [%[a]]!\n"
+		  "	 vld1.16 {d20}, [%[b]]!\n"
 		  "	 subs %[remainder], %[remainder], #4\n"
 		  "	 vmull.s16 q0, d16, d20\n"
-		  "      beq 5f\n" 
+		  "      beq 5f\n"
 		  "	 b 4f\n"
 		  "1:"
-		  "	 vld1.16 {d16, d17, d18, d19}, [%[b]]!\n"
-		  "	 vld1.16 {d20, d21, d22, d23}, [%[a]]!\n"
+		  "	 vld1.16 {d16, d17, d18, d19}, [%[a]]!\n"
+		  "	 vld1.16 {d20, d21, d22, d23}, [%[b]]!\n"
 		  "	 subs %[len], %[len], #16\n"
 		  "	 vmull.s16 q0, d16, d20\n"
 		  "	 vmlal.s16 q0, d17, d21\n"
@@ -89,8 +76,8 @@ static inline int32_t inner_product_single(const int16_t *a, const int16_t *b, u
 		  "	 vmlal.s16 q0, d19, d23\n"
 		  "	 beq 3f\n"
 		  "2:"
-		  "	 vld1.16 {d16, d17, d18, d19}, [%[b]]!\n"
-		  "	 vld1.16 {d20, d21, d22, d23}, [%[a]]!\n"
+		  "	 vld1.16 {d16, d17, d18, d19}, [%[a]]!\n"
+		  "	 vld1.16 {d20, d21, d22, d23}, [%[b]]!\n"
 		  "	 subs %[len], %[len], #16\n"
 		  "	 vmlal.s16 q0, d16, d20\n"
 		  "	 vmlal.s16 q0, d17, d21\n"
@@ -101,8 +88,8 @@ static inline int32_t inner_product_single(const int16_t *a, const int16_t *b, u
 		  "	 cmp %[remainder], #0\n"
 		  "	 beq 5f\n"
 		  "4:"
-		  "	 vld1.16 {d16}, [%[b]]!\n"
-		  "	 vld1.16 {d20}, [%[a]]!\n"
+		  "	 vld1.16 {d16}, [%[a]]!\n"
+		  "	 vld1.16 {d20}, [%[b]]!\n"
 		  "	 subs %[remainder], %[remainder], #4\n"
 		  "	 vmlal.s16 q0, d16, d20\n"
 		  "	 bne 4b\n"
@@ -118,27 +105,26 @@ static inline int32_t inner_product_single(const int16_t *a, const int16_t *b, u
 		  : "cc", "q0",
 		    "d16", "d17", "d18", "d19",
 		    "d20", "d21", "d22", "d23");
-
     return ret;
 }
+
 #elif defined(FLOATING_POINT)
 
 static inline int32_t saturate_float_to_16bit(float a) {
     int32_t ret;
-    asm ("vmov.f32 d0[0], %[a]\n"
-         "vcvt.s32.f32 d0, d0, #15\n"
-         "vqrshrn.s32 d0, q0, #15\n"
-         "vmov.s16 %[ret], d0[0]\n"
+    asm ("vmov.f32 d24[0], %[a]\n"
+         "vcvt.s32.f32 d24, d24, #15\n"
+         "vqrshrn.s32 d24, q12, #15\n"
+         "vmov.s16 %[ret], d24[0]\n"
          : [ret] "=&r" (ret)
          : [a] "r" (a)
-         : "q0");
+         : "q12", "d24", "d25" );
     return ret;
 }
 #undef WORD2INT
 #define WORD2INT(x) (saturate_float_to_16bit(x))
 
 #define OVERRIDE_INNER_PRODUCT_SINGLE
-/* Only works when len % 4 == 0 */
 static inline float inner_product_single(const float *a, const float *b, unsigned int len)
 {
     float ret;
@@ -147,17 +133,17 @@ static inline float inner_product_single(const float *a, const float *b, unsigne
 
     asm volatile ("	 cmp %[len], #0\n"
 		  "	 bne 1f\n"
-		  "	 vld1.32 {q4}, [%[b]]!\n"
-		  "	 vld1.32 {q8}, [%[a]]!\n"
+		  "	 vld1.32 {q4}, [%[a]]!\n"
+		  "	 vld1.32 {q8}, [%[b]]!\n"
 		  "	 subs %[remainder], %[remainder], #4\n"
 		  "	 vmul.f32 q0, q4, q8\n"
-		  "      bne 4f\n" 
-		  "	 b 5f\n"
+		  "      beq 5f\n"
+		  "	 b 4f\n"
 		  "1:"
-		  "	 vld1.32 {q4, q5}, [%[b]]!\n"
-		  "	 vld1.32 {q8, q9}, [%[a]]!\n"
-		  "	 vld1.32 {q6, q7}, [%[b]]!\n"
-		  "	 vld1.32 {q10, q11}, [%[a]]!\n"
+		  "	 vld1.32 {q4, q5}, [%[a]]!\n"
+		  "	 vld1.32 {q8, q9}, [%[b]]!\n"
+		  "	 vld1.32 {q6, q7}, [%[a]]!\n"
+		  "	 vld1.32 {q10, q11}, [%[b]]!\n"
 		  "	 subs %[len], %[len], #16\n"
 		  "	 vmul.f32 q0, q4, q8\n"
 		  "	 vmul.f32 q1, q5, q9\n"
@@ -165,10 +151,10 @@ static inline float inner_product_single(const float *a, const float *b, unsigne
 		  "	 vmul.f32 q3, q7, q11\n"
 		  "	 beq 3f\n"
 		  "2:"
-		  "	 vld1.32 {q4, q5}, [%[b]]!\n"
-		  "	 vld1.32 {q8, q9}, [%[a]]!\n"
-		  "	 vld1.32 {q6, q7}, [%[b]]!\n"
-		  "	 vld1.32 {q10, q11}, [%[a]]!\n"
+		  "	 vld1.32 {q4, q5}, [%[a]]!\n"
+		  "	 vld1.32 {q8, q9}, [%[b]]!\n"
+		  "	 vld1.32 {q6, q7}, [%[a]]!\n"
+		  "	 vld1.32 {q10, q11}, [%[b]]!\n"
 		  "	 subs %[len], %[len], #16\n"
 		  "	 vmla.f32 q0, q4, q8\n"
 		  "	 vmla.f32 q1, q5, q9\n"
@@ -178,12 +164,12 @@ static inline float inner_product_single(const float *a, const float *b, unsigne
 		  "3:"
 		  "	 vadd.f32 q4, q0, q1\n"
 		  "	 vadd.f32 q5, q2, q3\n"
-		  "	 cmp %[remainder], #0\n"
 		  "	 vadd.f32 q0, q4, q5\n"
+		  "	 cmp %[remainder], #0\n"
 		  "	 beq 5f\n"
 		  "4:"
-		  "	 vld1.32 {q6}, [%[b]]!\n"
-		  "	 vld1.32 {q10}, [%[a]]!\n"
+		  "	 vld1.32 {q6}, [%[a]]!\n"
+		  "	 vld1.32 {q10}, [%[b]]!\n"
 		  "	 subs %[remainder], %[remainder], #4\n"
 		  "	 vmla.f32 q0, q6, q10\n"
 		  "	 bne 4b\n"
@@ -195,7 +181,7 @@ static inline float inner_product_single(const float *a, const float *b, unsigne
 		    [len] "+l" (len), [remainder] "+l" (remainder)
 		  :
 		  : "cc", "q0", "q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8",
-                    "q9", "q10", "q11");
+		    "q9", "q10", "q11");
     return ret;
 }
 #endif

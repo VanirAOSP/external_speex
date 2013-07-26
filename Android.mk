@@ -28,15 +28,13 @@ LOCAL_SRC_FILES := \
 
 LOCAL_MODULE:= libspeex
 
-LOCAL_PRELINK_MODULE := false
-
 LOCAL_CFLAGS+= -DEXPORT= -DFLOATING_POINT -DUSE_SMALLFT -DVAR_ARRAYS
 LOCAL_CFLAGS+= -O3 -fstrict-aliasing -fprefetch-loop-arrays 
 
 LOCAL_C_INCLUDES += \
 	$(LOCAL_PATH)/include
 
-include $(BUILD_SHARED_LIBRARY)
+include $(BUILD_STATIC_LIBRARY)
 
 include $(CLEAR_VARS)
 

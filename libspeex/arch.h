@@ -71,11 +71,10 @@
 #error "Don't you think enabling fixed-point is a good thing to do if you want to debug that?"
 #endif
 
-
 #endif
 
 #ifndef OUTSIDE_SPEEX
-#include "../include/speex/speex_types.h"
+#include "speex/speex_types.h"
 #endif
 
 #define ABS(x) ((x) < 0 ? (-(x)) : (x))      /**< Absolute integer value. */
@@ -89,7 +88,7 @@
 #ifdef FIXED_POINT
 
 typedef spx_int16_t spx_word16_t;
-typedef spx_int32_t spx_word32_t;
+typedef spx_int32_t   spx_word32_t;
 typedef spx_word32_t spx_mem_t;
 typedef spx_word16_t spx_coef_t;
 typedef spx_word16_t spx_lsp_t;

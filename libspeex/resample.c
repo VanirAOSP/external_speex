@@ -70,7 +70,7 @@ static void speex_free (void *ptr) {free(ptr);}
 #include "arch.h"
 #else /* OUTSIDE_SPEEX */
                
-#include "../include/speex/speex_resampler.h"
+#include "speex/speex_resampler.h"
 #include "arch.h"
 #include "os_support.h"
 #endif /* OUTSIDE_SPEEX */
@@ -349,21 +349,15 @@ static int resampler_basic_direct_single(SpeexResamplerState *st, spx_uint32_t c
       const spx_word16_t *iptr = & in[last_sample];
 
 #ifndef OVERRIDE_INNER_PRODUCT_SINGLE
-      sum = 0;
-      for(j=0;j<N;j++) sum += MULT16_16(sinc[j], iptr[j]);
+      float accum[4] = {0,0,0,0};
 
-/*    This code is slower on most DSPs which have only 2 accumulators.
-      Plus this this forces truncation to 32 bits and you lose the HW guard bits.
-      I think we can trust the compiler and let it vectorize and/or unroll itself.
-      spx_word32_t accum[4] = {0,0,0,0};
       for(j=0;j<N;j+=4) {
-        accum[0] += MULT16_16(sinc[j], iptr[j]);
-        accum[1] += MULT16_16(sinc[j+1], iptr[j+1]);
-        accum[2] += MULT16_16(sinc[j+2], iptr[j+2]);
-        accum[3] += MULT16_16(sinc[j+3], iptr[j+3]);
+        accum[0] += sinc[j]*iptr[j];
+        accum[1] += sinc[j+1]*iptr[j+1];
+        accum[2] += sinc[j+2]*iptr[j+2];
+        accum[3] += sinc[j+3]*iptr[j+3];
       }
       sum = accum[0] + accum[1] + accum[2] + accum[3];
-*/
       sum = SATURATE32PSHR(sum, 15, 32767);
 #else
       sum = inner_product_single(sinc, iptr, N);
@@ -474,7 +468,7 @@ static int resampler_basic_interpolate_single(SpeexResamplerState *st, spx_uint3
       }
 
       cubic_coef(frac, interp);
-      sum = MULT16_32_Q15(interp[0],SHR32(accum[0], 1)) + MULT16_32_Q15(interp[1],SHR32(accum[1], 1)) + MULT16_32_Q15(interp[2],SHR32(accum[2], 1)) + MULT16_32_Q15(interp[3],SHR32(accum[3], 1));
+      sum = MULT16_32_Q15(interp[0],accum[0]) + MULT16_32_Q15(interp[1],accum[1]) + MULT16_32_Q15(interp[2],accum[2]) + MULT16_32_Q15(interp[3],accum[3]);
       sum = SATURATE32PSHR(sum, 15, 32767);
 #else
       cubic_coef(frac, interp);
@@ -591,8 +585,8 @@ static void update_filter(SpeexResamplerState *st)
    }
    
    /* Choose the resampling type that requires the least amount of memory */
-#ifdef RESAMPLE_FULL_SINC_TABLE
-   if (1) 
+#ifdef RESAMPLE_FORCE_FULL_SINC_TABLE
+   if (1)
 #else
    if (st->den_rate <= st->oversample)
 #endif
